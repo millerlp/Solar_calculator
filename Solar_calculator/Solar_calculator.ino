@@ -10,6 +10,7 @@
 #define julianUnixEpoch  2440587.5 // julian days to start of unix epoch
 #define myUnixDate 1352059200
 #define lat 36.62  // latitude, values north of equator are positive
+#define lon -121.9 // longitude, values west of GMT are negative
 void setup () {
 //    Wire.begin(); // Start the I2C
 //    RTC.begin(); // Init RTC
@@ -103,12 +104,28 @@ void loop() {
   
   // Solar Noon - result is given as fraction of a day
   // Time value is in GMT
-  double Solar_Noon = (720 - 4 * lon - EOT) / 1440 
+  double SolarNoon = (720 - 4 * lon - EOT) / 1440 ;
+  
+  // Sunrise Time
+  double Sunrise = SolarNoon - HAS * 4/1440;
+  
+  // Sunset Time
+  double Sunset = SolarNoon + HAS * 4/1440;
   
   //TODO: figure out how to convert fractional day to DateTime or Time
   
-  Serial.println(SDec,6);
-  Serial.println(HAS,6);
+  // Sunlight Duration (minutes)
+  double SunDuration = 8 * HAS;
+  
+  // True Solar Time (minutes)
+  // need a fractional day value for original time. Should be able
+  // to get this from DateTime object as now.mm() now.hh(), now.ss()
+//  double TST = 
+  
+  
+  Serial.println(SolarNoon,6);
+  Serial.println(Sunrise,6);
+  Serial.println(Sunset,6);
   delay(1000);
   
 }
