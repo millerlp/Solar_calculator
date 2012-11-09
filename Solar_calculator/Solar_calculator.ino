@@ -1,5 +1,6 @@
 
 #include <math.h>
+#include <Time.h>
 //#include <Wire.h>
 //#include <SPI.h>  // not used here, but needed to prevent a RTClib compile error
 //#include "RTClib.h"
@@ -8,7 +9,8 @@
 
 #define timeZoneOffset -8 // Time zone offset (hr), zones west of GMT are negative
 #define julianUnixEpoch  2440587.5 // julian days to start of unix epoch
-#define myUnixDate 1352059200
+#define myUnixDate 1352030400 // used for testing 2012-11-04 12:00
+//#define myUnixDate 1352029680 // used for testing 2012-11-04 11:48
 #define lat 36.62  // latitude, values north of equator are positive
 #define lon -121.9 // longitude, values west of GMT are negative
 void setup () {
@@ -22,6 +24,22 @@ void setup () {
 }
 
 void loop() {
+  
+  // Initialize a Time value (seconds since 1970-1-1)
+  setTime(myUnixDate); // set time using Time library function
+  Serial.print(hour()); // Display time using Time library functions
+  Serial.print(":");
+  Serial.print(minute());
+  Serial.print(" ");
+  Serial.print(day());
+  Serial.print("-");
+  Serial.print(month());
+  Serial.print("-");
+  Serial.println(year());
+ // print unix time (seconds since 1970) using Time library now() 
+  Serial.println(now()); 
+  
+  
 //  DateTime now = RTC.now(); // Read current date and time
 //  DateTime now = DateTime(2012,11,4,12,00,00); // define a fixed time value
 //  Serial.print("My date: ");
@@ -30,15 +48,25 @@ void loop() {
   // Calculate number of days (+ fractional days) since start of
   // unix epoch
 //  double unixDays = now.unixtime() / 86400.0;
-  double unixDays = myUnixDate / 86400.0;
+
+  time_t t = now(); // store time value in t
+  // Calculate the time past midnight, as a fractional day value
+  // e.g. if it's noon, the result should be 0.5.
+  double timeFracDay = ((((double)(second(t)/60) + minute(t))/60) + hour(t))/24;
+  Serial.println(timeFracDay,7);
+  // unixDays is the number of days(+fractional days) since start
+  // of the Unix epoch
+  double unixDays = myUnixDate / 86400;
   // calculate Julian Day Number
-  double JDN = julianUnixEpoch + unixDays; 
+  double JDN = julianUnixEpoch + unixDays;
+  // Add the fractional day value to the Julian Day number. If the
+  // input value was in the GMT time zone, we could proceed directly
+  // with this value. 
+  JDN = JDN + timeFracDay;
   // Adjust JDN to GMT time zone
-  JDN = JDN - (timeZoneOffset / 24);
-  
+  JDN = JDN - ((double)timeZoneOffset / 24);
   // Calculate Julian Century Number
   double JCN = (JDN - 2451545) / 36525;
-  
   // Geometric Mean Longitude of Sun (degrees)
   double GMLS = (280.46646 + JCN * (36000.76983 + JCN * 0.0003032));
   // Finish GMLS calculation by calculating modolu(GMLS,360) as
@@ -118,14 +146,69 @@ void loop() {
   double SunDuration = 8 * HAS;
   
   // True Solar Time (minutes)
-  // need a fractional day value for original time. Should be able
-  // to get this from DateTime object as now.mm() now.hh(), now.ss()
-//  double TST = 
-  
-  
-  Serial.println(SolarNoon,6);
-  Serial.println(Sunrise,6);
-  Serial.println(Sunset,6);
+  double TST = (timeFracDay * 1440 + 
+      EOT + 4 * lon - 60 * timeZoneOffset);    
+  // Finish TST calculation by calculating modolu(TST,360) as
+  // it's done in R or Excel. C's fmod doesn't work in the same
+  // way. The floor() function is from the math.h library. 
+  TST = TST - (1440 * (floor(TST/1440)) );
+  // Hour Angle (degrees)
+  double HA;
+  if (TST/4 < 0) {
+    HA = TST/4 + 180;
+  } else if (TST/4 >= 0) {
+    HA = TST/4 - 180; 
+  }
+  // Solar Zenith Angle (degrees)
+  double SZA = (acos(sin(lat * DEG_TO_RAD) * 
+      sin(SDec* DEG_TO_RAD) + 
+      cos(lat * DEG_TO_RAD) *
+      cos(SDec * DEG_TO_RAD) *
+      cos(HA * DEG_TO_RAD))) * RAD_TO_DEG;
+  // Solar Elevation Angle (degrees)
+  double SEA = 90 - SZA;
+  // Approximate Atmospheric Refraction (degrees)
+  double AAR;
+  if (SEA > 85) {
+    AAR = 0;
+  } else if (SEA > 5) {
+    AAR = (58.1 / tan(SEA * DEG_TO_RAD)) -
+        0.07 / (pow(tan(SEA * DEG_TO_RAD),3)) +
+        0.000086 / (pow(tan(SEA * DEG_TO_RAD),5));
+  } else if (SEA > -0.575) {
+    AAR = 1735 + SEA * (-581.2 * SEA * 
+        (103.4 + SEA * (-12.79 + SEA * 0.711)));
+  } else {
+    AAR = -20.772 / tan(SEA * DEG_TO_RAD);
+  }
+  AAR = AAR / 3600.0;
+  // Solar Elevation Corrected for Atmospheric 
+  // refraction (degrees)
+  double SEC_Corr = SEA + AAR;
+  // Solar Azimuth Angle (degrees clockwise from North)
+  double SAA;
+  if (HA > 0) {
+    SAA = (((acos((sin(lat * DEG_TO_RAD) * 
+        cos(SZA * DEG_TO_RAD) - 
+        sin(SDec * DEG_TO_RAD)) /
+        (cos(lat * DEG_TO_RAD) *
+        sin(SZA * DEG_TO_RAD))) ) *
+        RAD_TO_DEG) + 180);
+    SAA = SAA - (360 * (floor(SAA/360)));
+  } else {
+     SAA = (540 - (acos((((sin(lat * DEG_TO_RAD) *
+        cos(SZA * DEG_TO_RAD))) - 
+        sin(SDec * DEG_TO_RAD)) / 
+        (cos(lat * DEG_TO_RAD) * 
+        sin(SZA * DEG_TO_RAD)))) * 
+        RAD_TO_DEG);  
+     SAA = SAA - (360 * (floor(SAA/360)));
+  }   
+  Serial.print("SAA: ");
+  Serial.println(SAA,6);
+  Serial.print("SEC_Corr: ");
+  Serial.println(SEC_Corr,6);
+
   delay(1000);
   
 }
