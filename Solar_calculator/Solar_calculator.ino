@@ -9,8 +9,8 @@
 
 #define timeZoneOffset -8 // Time zone offset (hr), zones west of GMT are negative
 #define julianUnixEpoch  2440587.5 // julian days to start of unix epoch
-#define myUnixDate 1352030400 // used for testing 2012-11-04 12:00
-//#define myUnixDate 1352029680 // used for testing 2012-11-04 11:48
+//#define myUnixDate 1352030400 // used for testing 2012-11-04 12:00
+#define myUnixDate 1352029680 // used for testing 2012-11-04 11:48
 #define lat 36.62  // latitude, values north of equator are positive
 #define lon -121.9 // longitude, values west of GMT are negative
 void setup () {
@@ -27,36 +27,23 @@ void loop() {
   
   // Initialize a Time value (seconds since 1970-1-1)
   setTime(myUnixDate); // set time using Time library function
-  Serial.print(hour()); // Display time using Time library functions
-  Serial.print(":");
-  Serial.print(minute());
-  Serial.print(" ");
-  Serial.print(day());
-  Serial.print("-");
-  Serial.print(month());
-  Serial.print("-");
-  Serial.println(year());
- // print unix time (seconds since 1970) using Time library now() 
-  Serial.println(now()); 
-  
-  
-//  DateTime now = RTC.now(); // Read current date and time
-//  DateTime now = DateTime(2012,11,4,12,00,00); // define a fixed time value
-//  Serial.print("My date: ");
-//  char buff[32]; // character buffer to hold date/time as string
-//  Serial.println(now.toString(buff,32));
-  // Calculate number of days (+ fractional days) since start of
-  // unix epoch
-//  double unixDays = now.unixtime() / 86400.0;
-
   time_t t = now(); // store time value in t
+  Serial.println();
+  Serial.print("Input time: ");
+  printDateTime(t);
+  // Print out unixtime representation (seconds since 1970-1-1)
+  Serial.println(t); 
+  
+  
   // Calculate the time past midnight, as a fractional day value
   // e.g. if it's noon, the result should be 0.5.
   double timeFracDay = ((((double)(second(t)/60) + minute(t))/60) + hour(t))/24;
   Serial.println(timeFracDay,7);
   // unixDays is the number of days(+fractional days) since start
-  // of the Unix epoch
-  double unixDays = myUnixDate / 86400;
+  // of the Unix epoch. The division sign will truncate any remainder
+  // since this will be done as integer division.
+  long unixDays = myUnixDate / 86400;
+
   // calculate Julian Day Number
   double JDN = julianUnixEpoch + unixDays;
   // Add the fractional day value to the Julian Day number. If the
@@ -133,14 +120,44 @@ void loop() {
   // Solar Noon - result is given as fraction of a day
   // Time value is in GMT
   double SolarNoon = (720 - 4 * lon - EOT) / 1440 ;
+  // SolarNoon is given as a fraction of a day. Add this
+  // to the unixDays value, which currently holds the
+  // whole days since 1970-1-1 00:00
+  double SolarNoonDays = unixDays + SolarNoon;
+  // SolarNoonDays is in GMT time zone, correct it to 
+  // the input time zone
+  SolarNoonDays = SolarNoonDays + ((double)timeZoneOffset / 24);
+  // Then convert SolarNoonDays to seconds
+  time_t SolarNoonTime = SolarNoonDays * 86400;
+  Serial.print("Solar Noon Time: ");
+  printDateTime(SolarNoonTime);
+
   
-  // Sunrise Time
+  // Sunrise Time, given as fraction of a day
   double Sunrise = SolarNoon - HAS * 4/1440;
-  
+  // Convert Sunrise to days since 1970-1-1
+  Sunrise = unixDays + Sunrise;
+  // Correct Sunrise to local time zone from GMT
+  Sunrise = Sunrise + ((double)timeZoneOffset / 24);
+  // Convert Sunrise to seconds since 1970-1-1
+  Sunrise = Sunrise * 86400;
+  // Convert Sunrise to a time_t object (Time library)
+  Sunrise = (time_t)Sunrise; 
+  Serial.print("Sunrise time: ");
+  printDateTime(Sunrise);
+   
   // Sunset Time
   double Sunset = SolarNoon + HAS * 4/1440;
-  
-  //TODO: figure out how to convert fractional day to DateTime or Time
+  // Convert Sunset to days since 1970-1-1
+  Sunset = unixDays + Sunset;
+  // Correct Sunset to local time zone from GMT
+  Sunset = Sunset + ((double)timeZoneOffset / 24);
+  // Convert Sunset to seconds since 1970-1-1
+  Sunset = Sunset * 86400;
+  // Convert Sunset to a time_t object (Time library)
+  Sunset = (time_t)Sunset;
+  Serial.print("Sunset time: ");
+  printDateTime(Sunset);
   
   // Sunlight Duration (minutes)
   double SunDuration = 8 * HAS;
@@ -203,12 +220,38 @@ void loop() {
         sin(SZA * DEG_TO_RAD)))) * 
         RAD_TO_DEG);  
      SAA = SAA - (360 * (floor(SAA/360)));
-  }   
-  Serial.print("SAA: ");
+  }
+  
+  Serial.print("Solar Azimuth: ");
   Serial.println(SAA,6);
-  Serial.print("SEC_Corr: ");
+  Serial.print("Solar Elevation: ");
   Serial.println(SEC_Corr,6);
-
   delay(1000);
   
+}  // end of main loop
+
+
+// Utility function to print time and date nicely
+void printDateTime(time_t t){
+  Serial.print(year(t));
+  printDateDigits(month(t));
+  printDateDigits(day(t));
+  Serial.print(" ");
+  Serial.print(hour(t));
+  printDigits(minute(t));
+  printDigits(second(t));
+  Serial.println();
+}
+// Utility function to print month/day digits nicely
+void printDateDigits(int digits){
+  Serial.print("-");
+  if(digits < 10) Serial.print("0");
+  Serial.print(digits); 
+}
+// Utility function for time value printing
+void printDigits(int digits){
+  Serial.print(":");
+  if(digits < 10)
+    Serial.print('0');
+  Serial.print(digits);
 }
