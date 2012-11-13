@@ -1,21 +1,15 @@
 
 #include <math.h>
 #include <Time.h>
-//#include <Wire.h>
-//#include <SPI.h>  // not used here, but needed to prevent a RTClib compile error
-//#include "RTClib.h"
-
-//RTC_DS1307 RTC; 
 
 #define timeZoneOffset -8 // Time zone offset (hr), zones west of GMT are negative
 #define julianUnixEpoch  2440587.5 // julian days to start of unix epoch
 //#define myUnixDate 1352030400 // used for testing 2012-11-04 12:00
-#define myUnixDate 1352029680 // used for testing 2012-11-04 11:48
+#define myUnixDate 1352029680 // used for testing 
 #define lat 36.62  // latitude, values north of equator are positive
 #define lon -121.9 // longitude, values west of GMT are negative
 void setup () {
-//    Wire.begin(); // Start the I2C
-//    RTC.begin(); // Init RTC
+
     Serial.begin(115200); // Set serial port speed
     
     // while the serial stream is not open, do nothing:
